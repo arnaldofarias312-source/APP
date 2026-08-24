@@ -80,7 +80,7 @@ export default function ForgotPasswordScreen({ navigation }) {
     showModal({
       type: 'success',
       title: '¡Código enviado!',
-      message: `Enviamos un código de 6 dígitos a ${email.trim()}. Revisá tu bandeja de entrada o spam.`,
+      message: `Enviamos un código de 8 dígitos a ${email.trim()}. Revisá tu bandeja de entrada o spam.`,
       buttonText: 'Continuar',
       onConfirm: () => setStep(2),
     });
@@ -92,7 +92,7 @@ export default function ForgotPasswordScreen({ navigation }) {
       showModal({
         type: 'warning',
         title: 'Campos requeridos',
-        message: 'Por favor completá el código de 6 dígitos y ambos campos de contraseña.',
+        message: 'Por favor completá el código de 8 dígitos y ambos campos de contraseña.',
       });
       return;
     }
@@ -129,7 +129,7 @@ export default function ForgotPasswordScreen({ navigation }) {
       showModal({
         type: 'error',
         title: 'Código incorrecto',
-        message: 'El código de 6 dígitos que ingresaste es inválido o ha expirado. Verificalo o solicita uno nuevo.',
+        message: 'El código de 8 dígitos que ingresaste es inválido o ha expirado. Verificalo o solicitá uno nuevo.',
       });
       return;
     }
@@ -209,7 +209,7 @@ export default function ForgotPasswordScreen({ navigation }) {
           <Text style={styles.subtitle}>
             {step === 1
               ? 'Ingresá tu correo electrónico y te enviaremos un código de seguridad para restablecerla.'
-              : `Ingresá el código de 6 dígitos que enviamos a ${email} y tu nueva contraseña.`}
+              : `Ingresá el código de 8 dígitos que enviamos a ${email} y tu nueva contraseña.`}
           </Text>
 
           {step === 1 ? (
@@ -247,18 +247,18 @@ export default function ForgotPasswordScreen({ navigation }) {
             /* PASO 2: Ingresar Código y Nueva Contraseña */
             <>
               {/* Código OTP */}
-              <Text style={styles.label}>Código de verificación (6 dígitos)</Text>
+              <Text style={styles.label}>Código de verificación (8 dígitos)</Text>
               <View style={styles.inputContainer}>
                 <Ionicons name="keypad-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Ej. 123456"
+                  placeholder="Ej. 12345678"
                   placeholderTextColor="#9CA3AF"
                   value={otpCode}
                   onChangeText={setOtpCode}
                   keyboardType="number-pad"
                   autoCapitalize="none"
-                  maxLength={6}
+                  maxLength={8}
                 />
               </View>
 
