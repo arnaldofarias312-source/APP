@@ -9,10 +9,10 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
+import StatusModal from '../components/StatusModal';
 
 export default function LoginScreen({ navigation, route }) {
   const [email, setEmail] = useState('');
@@ -20,6 +20,25 @@ export default function LoginScreen({ navigation, route }) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
+
+  const [modalConfig, setModalConfig] = useState({
+    visible: false,
+    type: 'info',
+    title: '',
+    message: '',
+    buttonText: 'Entendido',
+    onConfirm: null,
+  });
+
+  const showModal = ({ type = 'info', title, message, buttonText = 'Entendido', onConfirm = null }) => {
+    setModalConfig({ visible: true, type, title, message, buttonText, onConfirm });
+  };
+
+  const hideModal = () => {
+    const action = modalConfig.onConfirm;
+    setModalConfig((prev) => ({ ...prev, visible: false }));
+    if (action) action();
+  };
 
   useEffect(() => {
     if (route?.params?.registerSuccess) {
@@ -36,7 +55,11 @@ export default function LoginScreen({ navigation, route }) {
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Campos requeridos', 'Por favor ingresá tu correo y contraseña.');
+      showModal({
+        type: 'warning',
+        title: 'Campos requeridos',
+        message: 'Por favor ingresá tu correo electrónico y tu contraseña para continuar.',
+      });
       return;
     }
 
@@ -48,15 +71,19 @@ export default function LoginScreen({ navigation, route }) {
     setLoading(false);
 
     if (error) {
-      Alert.alert('Error al iniciar sesión', traducirError(error.message));
+      showModal({
+        type: 'error',
+        title: 'Error al iniciar sesión',
+        message: traducirError(error.message),
+      });
     }
     // Si no hay error, App.js detecta el cambio de sesión y muestra el mapa
   };
 
   const traducirError = (msg) => {
-    if (msg.includes('Invalid login credentials')) return 'Correo o contraseña incorrectos.';
-    if (msg.includes('Email not confirmed')) return 'Debés confirmar tu correo antes de ingresar.';
-    if (msg.includes('Too many requests')) return 'Demasiados intentos. Esperá unos minutos.';
+    if (msg.includes('Invalid login credentials')) return 'El correo o la contraseña que ingresaste son incorrectos.';
+    if (msg.includes('Email not confirmed')) return 'Debés confirmar tu correo electrónico antes de ingresar. Revisá tu bandeja de entrada.';
+    if (msg.includes('Too many requests')) return 'Demasiados intentos seguidos. Esperá unos minutos antes de intentar de nuevo.';
     return msg;
   };
 
@@ -170,6 +197,16 @@ export default function LoginScreen({ navigation, route }) {
           </View>
         </View>
       </ScrollView>
+
+      {/* Modal estético */}
+      <StatusModal
+        visible={modalConfig.visible}
+        type={modalConfig.type}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        buttonText={modalConfig.buttonText}
+        onClose={hideModal}
+      />
     </KeyboardAvoidingView>
   );
 }

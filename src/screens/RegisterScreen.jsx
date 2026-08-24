@@ -9,10 +9,10 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabaseAnon } from '../lib/supabase';
+import StatusModal from '../components/StatusModal';
 
 export default function RegisterScreen({ navigation }) {
   const [nombre, setNombre] = useState('');
@@ -23,18 +23,48 @@ export default function RegisterScreen({ navigation }) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const [modalConfig, setModalConfig] = useState({
+    visible: false,
+    type: 'info',
+    title: '',
+    message: '',
+    buttonText: 'Entendido',
+    onConfirm: null,
+  });
+
+  const showModal = ({ type = 'info', title, message, buttonText = 'Entendido', onConfirm = null }) => {
+    setModalConfig({ visible: true, type, title, message, buttonText, onConfirm });
+  };
+
+  const hideModal = () => {
+    const action = modalConfig.onConfirm;
+    setModalConfig((prev) => ({ ...prev, visible: false }));
+    if (action) action();
+  };
+
   const handleRegister = async () => {
-    // Validaciones
     if (!nombre.trim() || !email.trim() || !password || !confirmPassword) {
-      Alert.alert('Campos requeridos', 'Por favor completá todos los campos.');
+      showModal({
+        type: 'warning',
+        title: 'Campos requeridos',
+        message: 'Por favor completá todos los campos para crear tu cuenta.',
+      });
       return;
     }
     if (password.length < 8) {
-      Alert.alert('Contraseña muy corta', 'La contraseña debe tener al menos 8 caracteres.');
+      showModal({
+        type: 'warning',
+        title: 'Contraseña muy corta',
+        message: 'La contraseña debe tener al menos 8 caracteres para ser segura.',
+      });
       return;
     }
     if (password !== confirmPassword) {
-      Alert.alert('Las contraseñas no coinciden', 'Verificá que ambas contraseñas sean iguales.');
+      showModal({
+        type: 'warning',
+        title: 'Las contraseñas no coinciden',
+        message: 'Asegurate de que ambas contraseñas escritas sean exactamente iguales.',
+      });
       return;
     }
 
@@ -44,15 +74,17 @@ export default function RegisterScreen({ navigation }) {
       email: email.trim(),
       password,
       options: {
-        data: {
-          full_name: nombre.trim(),
-        },
+        data: { full_name: nombre.trim() },
       },
     });
     setLoading(false);
 
     if (error) {
-      Alert.alert('Error al registrarse', traducirError(error.message));
+      showModal({
+        type: 'error',
+        title: 'Error al registrarse',
+        message: traducirError(error.message),
+      });
       return;
     }
 
@@ -65,16 +97,16 @@ export default function RegisterScreen({ navigation }) {
 
   const traducirError = (msg) => {
     if (msg.includes('already registered') || msg.includes('already exists')) {
-      return 'Ese correo ya está registrado. Iniciá sesión.';
+      return 'Ese correo ya tiene una cuenta registrada. Podés iniciar sesión directamente.';
     }
     if (msg.includes('invalid email') || msg.includes('Invalid email')) {
-      return 'El correo electrónico no es válido.';
+      return 'El correo electrónico ingresado no tiene un formato válido.';
     }
     if (msg.includes('Password should be')) {
       return 'La contraseña debe tener al menos 8 caracteres.';
     }
-    if (msg.includes('Too many requests')) {
-      return 'Demasiados intentos. Esperá unos minutos.';
+    if (msg.includes('Too many requests') || msg.includes('rate limit') || msg.includes('email rate limit')) {
+      return 'Demasiados intentos seguidos. Esperá unos minutos antes de intentar de nuevo.';
     }
     return msg;
   };
@@ -140,10 +172,7 @@ export default function RegisterScreen({ navigation }) {
               secureTextEntry={!showPassword}
               autoCapitalize="none"
             />
-            <TouchableOpacity
-              onPress={() => setShowPassword(!showPassword)}
-              style={styles.eyeButton}
-            >
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeButton}>
               <Ionicons
                 name={showPassword ? 'eye-outline' : 'eye-off-outline'}
                 size={20}
@@ -165,10 +194,7 @@ export default function RegisterScreen({ navigation }) {
               secureTextEntry={!showConfirmPassword}
               autoCapitalize="none"
             />
-            <TouchableOpacity
-              onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-              style={styles.eyeButton}
-            >
+            <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.eyeButton}>
               <Ionicons
                 name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'}
                 size={20}
@@ -200,6 +226,16 @@ export default function RegisterScreen({ navigation }) {
           </View>
         </View>
       </ScrollView>
+
+      {/* Modal estético */}
+      <StatusModal
+        visible={modalConfig.visible}
+        type={modalConfig.type}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        buttonText={modalConfig.buttonText}
+        onClose={hideModal}
+      />
     </KeyboardAvoidingView>
   );
 }

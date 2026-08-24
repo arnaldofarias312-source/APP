@@ -9,10 +9,10 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
+import StatusModal from '../components/StatusModal';
 
 export default function ForgotPasswordScreen({ navigation }) {
   const [step, setStep] = useState(1); // 1: Pedir email, 2: Ingresar código OTP y nueva contraseña
@@ -24,10 +24,43 @@ export default function ForgotPasswordScreen({ navigation }) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Estado para el modal estético
+  const [modalConfig, setModalConfig] = useState({
+    visible: false,
+    type: 'info',
+    title: '',
+    message: '',
+    buttonText: 'Entendido',
+    onConfirm: null,
+  });
+
+  const showModal = ({ type = 'info', title, message, buttonText = 'Entendido', onConfirm = null }) => {
+    setModalConfig({
+      visible: true,
+      type,
+      title,
+      message,
+      buttonText,
+      onConfirm,
+    });
+  };
+
+  const hideModal = () => {
+    const onConfirmAction = modalConfig.onConfirm;
+    setModalConfig((prev) => ({ ...prev, visible: false }));
+    if (onConfirmAction) {
+      onConfirmAction();
+    }
+  };
+
   // Paso 1: Enviar correo de recuperación con código
   const handleSendCode = async () => {
     if (!email.trim()) {
-      Alert.alert('Campo requerido', 'Por favor ingresá tu correo electrónico.');
+      showModal({
+        type: 'warning',
+        title: 'Campo requerido',
+        message: 'Por favor ingresá tu correo electrónico para enviarte el código de seguridad.',
+      });
       return;
     }
 
@@ -36,31 +69,49 @@ export default function ForgotPasswordScreen({ navigation }) {
     setLoading(false);
 
     if (error) {
-      Alert.alert('Error', traducirError(error.message));
+      showModal({
+        type: 'error',
+        title: 'No se pudo enviar',
+        message: traducirError(error.message),
+      });
       return;
     }
 
-    Alert.alert(
-      'Código enviado',
-      'Te enviamos un código de verificación a tu correo. Ingresalo a continuación junto con tu nueva contraseña.'
-    );
-    setStep(2);
+    showModal({
+      type: 'success',
+      title: '¡Código enviado!',
+      message: `Enviamos un código de 6 dígitos a ${email.trim()}. Revisá tu bandeja de entrada o spam.`,
+      buttonText: 'Continuar',
+      onConfirm: () => setStep(2),
+    });
   };
 
   // Paso 2: Validar código OTP y cambiar la contraseña
   const handleResetPassword = async () => {
     if (!otpCode.trim() || !newPassword || !confirmPassword) {
-      Alert.alert('Campos requeridos', 'Por favor completá todos los campos.');
+      showModal({
+        type: 'warning',
+        title: 'Campos requeridos',
+        message: 'Por favor completá el código de 6 dígitos y ambos campos de contraseña.',
+      });
       return;
     }
 
     if (newPassword.length < 8) {
-      Alert.alert('Contraseña muy corta', 'La nueva contraseña debe tener al menos 8 caracteres.');
+      showModal({
+        type: 'warning',
+        title: 'Contraseña muy corta',
+        message: 'La nueva contraseña debe tener al menos 8 caracteres para ser segura.',
+      });
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      Alert.alert('Las contraseñas no coinciden', 'Verificá que ambas contraseñas sean iguales.');
+      showModal({
+        type: 'warning',
+        title: 'Las contraseñas no coinciden',
+        message: 'Asegurate de que ambas contraseñas escritas sean exactamente iguales.',
+      });
       return;
     }
 
@@ -75,7 +126,11 @@ export default function ForgotPasswordScreen({ navigation }) {
 
     if (verifyError) {
       setLoading(false);
-      Alert.alert('Código incorrecto', 'El código ingresado es inválido o ha expirado.');
+      showModal({
+        type: 'error',
+        title: 'Código incorrecto',
+        message: 'El código de 6 dígitos que ingresaste es inválido o ha expirado. Verificalo o solicita uno nuevo.',
+      });
       return;
     }
 
@@ -87,29 +142,35 @@ export default function ForgotPasswordScreen({ navigation }) {
     setLoading(false);
 
     if (updateError) {
-      Alert.alert('Error al actualizar', traducirError(updateError.message));
+      showModal({
+        type: 'error',
+        title: 'Error al actualizar',
+        message: traducirError(updateError.message),
+      });
       return;
     }
 
     // Cerrar la sesión temporal para que inicie limpiamente con su nueva contraseña
     await supabase.auth.signOut();
 
-    Alert.alert(
-      '¡Contraseña actualizada!',
-      'Tu contraseña ha sido cambiada con éxito. Ya podés iniciar sesión con tu nueva clave.',
-      [{ text: 'Iniciar sesión', onPress: () => navigation.navigate('Login') }]
-    );
+    showModal({
+      type: 'success',
+      title: '¡Contraseña restablecida!',
+      message: 'Tu contraseña se cambió con éxito. Ya podés iniciar sesión con tu nueva clave.',
+      buttonText: 'Ir a Iniciar sesión',
+      onConfirm: () => navigation.navigate('Login'),
+    });
   };
 
   const traducirError = (msg) => {
     if (msg.includes('rate limit') || msg.includes('Too many requests')) {
-      return 'Demasiados intentos. Esperá unos minutos.';
+      return 'Demasiados intentos seguidos. Esperá unos minutos antes de volver a intentar.';
     }
     if (msg.includes('invalid email') || msg.includes('Invalid email')) {
-      return 'El correo electrónico no es válido.';
+      return 'El correo electrónico ingresado no tiene un formato válido.';
     }
     if (msg.includes('User not found')) {
-      return 'No existe una cuenta registrada con ese correo.';
+      return 'No encontramos ninguna cuenta registrada con ese correo electrónico.';
     }
     return msg;
   };
@@ -186,7 +247,7 @@ export default function ForgotPasswordScreen({ navigation }) {
             /* PASO 2: Ingresar Código y Nueva Contraseña */
             <>
               {/* Código OTP */}
-              <Text style={styles.label}>Código de verificación (Token)</Text>
+              <Text style={styles.label}>Código de verificación (6 dígitos)</Text>
               <View style={styles.inputContainer}>
                 <Ionicons name="keypad-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
                 <TextInput
@@ -197,6 +258,7 @@ export default function ForgotPasswordScreen({ navigation }) {
                   onChangeText={setOtpCode}
                   keyboardType="number-pad"
                   autoCapitalize="none"
+                  maxLength={6}
                 />
               </View>
 
@@ -282,6 +344,16 @@ export default function ForgotPasswordScreen({ navigation }) {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Modal estético para alertas y confirmaciones */}
+      <StatusModal
+        visible={modalConfig.visible}
+        type={modalConfig.type}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        buttonText={modalConfig.buttonText}
+        onClose={hideModal}
+      />
     </KeyboardAvoidingView>
   );
 }
