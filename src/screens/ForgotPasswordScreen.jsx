@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../lib/supabase';
+import { supabaseAnon } from '../lib/supabase';
 import StatusModal from '../components/StatusModal';
 
 export default function ForgotPasswordScreen({ navigation }) {
@@ -65,7 +65,7 @@ export default function ForgotPasswordScreen({ navigation }) {
     }
 
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+    const { error } = await supabaseAnon.auth.resetPasswordForEmail(email.trim());
     setLoading(false);
 
     if (error) {
@@ -117,8 +117,8 @@ export default function ForgotPasswordScreen({ navigation }) {
 
     setLoading(true);
 
-    // 1. Verificar el token OTP
-    const { error: verifyError } = await supabase.auth.verifyOtp({
+    // 1. Verificar el token OTP usando supabaseAnon (sin persistir sesión en App.js)
+    const { error: verifyError } = await supabaseAnon.auth.verifyOtp({
       email: email.trim(),
       token: otpCode.trim(),
       type: 'recovery',
@@ -135,7 +135,7 @@ export default function ForgotPasswordScreen({ navigation }) {
     }
 
     // 2. Actualizar la contraseña del usuario
-    const { error: updateError } = await supabase.auth.updateUser({
+    const { error: updateError } = await supabaseAnon.auth.updateUser({
       password: newPassword,
     });
 
@@ -150,15 +150,13 @@ export default function ForgotPasswordScreen({ navigation }) {
       return;
     }
 
-    // Cerrar la sesión temporal para que inicie limpiamente con su nueva contraseña
-    await supabase.auth.signOut();
+    // 3. Cerrar sesión en el cliente anónimo
+    await supabaseAnon.auth.signOut();
 
-    showModal({
-      type: 'success',
-      title: '¡Contraseña restablecida!',
-      message: 'Tu contraseña se cambió con éxito. Ya podés iniciar sesión con tu nueva clave.',
-      buttonText: 'Ir a Iniciar sesión',
-      onConfirm: () => navigation.navigate('Login'),
+    // Redirigir directamente al login con la bandera de éxito
+    navigation.navigate('Login', {
+      resetSuccess: true,
+      resetEmail: email.trim(),
     });
   };
 

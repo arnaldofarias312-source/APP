@@ -19,7 +19,7 @@ export default function LoginScreen({ navigation, route }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showSuccessBanner, setShowSuccessBanner] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
 
   const [modalConfig, setModalConfig] = useState({
     visible: false,
@@ -42,12 +42,21 @@ export default function LoginScreen({ navigation, route }) {
 
   useEffect(() => {
     if (route?.params?.registerSuccess) {
-      setShowSuccessBanner(true);
       if (route?.params?.registeredEmail) {
         setEmail(route.params.registeredEmail);
       }
+      setToastMessage('Registro exitoso');
       const timer = setTimeout(() => {
-        setShowSuccessBanner(false);
+        setToastMessage(null);
+      }, 4000);
+      return () => clearTimeout(timer);
+    } else if (route?.params?.resetSuccess) {
+      if (route?.params?.resetEmail) {
+        setEmail(route.params.resetEmail);
+      }
+      setToastMessage('Contraseña reestablecida con éxito');
+      const timer = setTimeout(() => {
+        setToastMessage(null);
       }, 4000);
       return () => clearTimeout(timer);
     }
@@ -92,27 +101,25 @@ export default function LoginScreen({ navigation, route }) {
       style={styles.wrapper}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      {/* Notificación emergente superior (Toast flotante) */}
+      {toastMessage && (
+        <View style={styles.toastContainer}>
+          <View style={styles.toastCard}>
+            <Ionicons name="checkmark-circle" size={22} color="#16A34A" style={{ marginRight: 10 }} />
+            <Text style={styles.toastText}>{toastMessage}</Text>
+            <TouchableOpacity onPress={() => setToastMessage(null)} style={styles.toastCloseBtn}>
+              <Ionicons name="close" size={18} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {/* Fondo degradado superior */}
         <View style={styles.topBlob} />
 
         {/* Tarjeta */}
         <View style={styles.card}>
-          {/* Banner de éxito al registrarse */}
-          {showSuccessBanner && (
-            <View style={styles.successBanner}>
-              <Ionicons name="checkmark-circle" size={20} color="#16A34A" style={{ marginRight: 8 }} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.successBannerTitle}>¡Registro exitoso!</Text>
-                <Text style={styles.successBannerText}>
-                  Tu cuenta fue creada. Ya podés iniciar sesión.
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => setShowSuccessBanner(false)} style={{ padding: 4 }}>
-                <Ionicons name="close" size={16} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
-          )}
 
           {/* Logo */}
           <View style={styles.logoContainer}>
@@ -246,25 +253,40 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 6,
   },
-  successBanner: {
+  toastContainer: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 54 : 40,
+    left: 20,
+    right: 20,
+    zIndex: 999,
+    alignItems: 'center',
+  },
+  toastCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 20,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    borderLeftWidth: 5,
+    borderLeftColor: '#16A34A',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 8,
+    width: '100%',
+    maxWidth: 400,
   },
-  successBannerTitle: {
+  toastText: {
+    flex: 1,
     fontSize: 14,
     fontWeight: '700',
     color: '#15803D',
   },
-  successBannerText: {
-    fontSize: 12,
-    color: '#166534',
-    marginTop: 2,
+  toastCloseBtn: {
+    padding: 4,
+    marginLeft: 6,
   },
   logoContainer: {
     alignItems: 'center',
