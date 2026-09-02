@@ -1,3 +1,4 @@
+// src/screens/LoginScreen.jsx
 import { useState, useEffect } from 'react';
 import {
   View,
@@ -10,6 +11,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import StatusModal from '../components/StatusModal';
@@ -40,6 +42,7 @@ export default function LoginScreen({ navigation, route }) {
     if (action) action();
   };
 
+  // Toast emergente al volver del registro o recuperación exitosa
   useEffect(() => {
     if (route?.params?.registerSuccess) {
       if (route?.params?.registeredEmail) {
@@ -62,12 +65,27 @@ export default function LoginScreen({ navigation, route }) {
     }
   }, [route?.params]);
 
+  // Filtro de email en tiempo real: sin espacios, minúsculas
+  const handleEmailChange = (text) => {
+    setEmail(text.replace(/\s/g, '').toLowerCase());
+  };
+
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
       showModal({
         type: 'warning',
         title: 'Campos requeridos',
-        message: 'Por favor ingresá tu correo electrónico y tu contraseña para continuar.',
+        message: 'Por favor ingresa tu correo electrónico y tu contraseña para continuar.',
+      });
+      return;
+    }
+
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email.trim())) {
+      showModal({
+        type: 'warning',
+        title: 'Correo inválido',
+        message: 'Por favor ingresa un correo electrónico con formato válido.',
       });
       return;
     }
@@ -86,124 +104,125 @@ export default function LoginScreen({ navigation, route }) {
         message: traducirError(error.message),
       });
     }
-    // Si no hay error, App.js detecta el cambio de sesión y muestra el mapa
   };
 
   const traducirError = (msg) => {
     if (msg.includes('Invalid login credentials')) return 'El correo o la contraseña que ingresaste son incorrectos.';
-    if (msg.includes('Email not confirmed')) return 'Debés confirmar tu correo electrónico antes de ingresar. Revisá tu bandeja de entrada.';
-    if (msg.includes('Too many requests')) return 'Demasiados intentos seguidos. Esperá unos minutos antes de intentar de nuevo.';
+    if (msg.includes('Email not confirmed')) return 'Debes confirmar tu correo electrónico antes de ingresar. Revisa tu bandeja de entrada.';
+    if (msg.includes('Too many requests')) return 'Demasiados intentos seguidos. Espera unos minutos antes de intentar de nuevo.';
     return msg;
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.wrapper}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      {/* Notificación emergente superior (Toast flotante) */}
-      {toastMessage && (
-        <View style={styles.toastContainer}>
-          <View style={styles.toastCard}>
-            <Ionicons name="checkmark-circle" size={22} color="#16A34A" style={{ marginRight: 10 }} />
-            <Text style={styles.toastText}>{toastMessage}</Text>
-            <TouchableOpacity onPress={() => setToastMessage(null)} style={styles.toastCloseBtn}>
-              <Ionicons name="close" size={18} color="#6B7280" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {/* Fondo degradado superior */}
-        <View style={styles.topBlob} />
-
-        {/* Tarjeta */}
-        <View style={styles.card}>
-
-          {/* Logo */}
-          <View style={styles.logoContainer}>
-            <View style={styles.logoBox}>
-              <Ionicons name="location" size={22} color="#1B9ADE" />
-              <Ionicons name="bus" size={18} color="#4CAF50" style={{ marginLeft: -4 }} />
+    <SafeAreaView style={styles.wrapper}>
+      <KeyboardAvoidingView
+        style={styles.wrapper}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        {/* Notificación emergente superior (Toast flotante) */}
+        {toastMessage && (
+          <View style={styles.toastContainer}>
+            <View style={styles.toastCard}>
+              <Ionicons name="checkmark-circle" size={22} color="#16A34A" style={{ marginRight: 10 }} />
+              <Text style={styles.toastText}>{toastMessage}</Text>
+              <TouchableOpacity onPress={() => setToastMessage(null)} style={styles.toastCloseBtn}>
+                <Ionicons name="close" size={18} color="#6B7280" />
+              </TouchableOpacity>
             </View>
-            <Text style={styles.logoLabel}>Movili</Text>
           </View>
+        )}
 
-          <Text style={styles.title}>Movili</Text>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          {/* Fondo degradado superior */}
+          <View style={styles.topBlob} />
 
-          {/* Campo email */}
-          <Text style={styles.label}>Correo electrónico</Text>
-          <View style={styles.inputContainer}>
-            <Ionicons name="mail-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="ejemplo@correo.com"
-              placeholderTextColor="#9CA3AF"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
+          {/* Tarjeta */}
+          <View style={styles.card}>
 
-          {/* Campo contraseña */}
-          <Text style={styles.label}>Contraseña</Text>
-          <View style={styles.inputContainer}>
-            <Ionicons name="lock-closed-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="••••••••"
-              placeholderTextColor="#9CA3AF"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-            />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeButton}>
-              <Ionicons
-                name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                size={20}
-                color="#9CA3AF"
+            {/* Logo */}
+            <View style={styles.logoContainer}>
+              <View style={styles.logoBox}>
+                <Ionicons name="location" size={22} color="#1B9ADE" />
+                <Ionicons name="bus" size={18} color="#4CAF50" style={{ marginLeft: -4 }} />
+              </View>
+              <Text style={styles.logoLabel}>Movili</Text>
+            </View>
+
+            <Text style={styles.title}>Movili</Text>
+
+            {/* Campo email */}
+            <Text style={styles.label}>Correo electrónico</Text>
+            <View style={styles.inputContainer}>
+              <Ionicons name="mail-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="ejemplo@correo.com"
+                placeholderTextColor="#9CA3AF"
+                value={email}
+                onChangeText={handleEmailChange}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
               />
+            </View>
+
+            {/* Campo contraseña */}
+            <Text style={styles.label}>Contraseña</Text>
+            <View style={styles.inputContainer}>
+              <Ionicons name="lock-closed-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="••••••••"
+                placeholderTextColor="#9CA3AF"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeButton}>
+                <Ionicons
+                  name={showPassword ? 'eye-outline' : 'eye-off-outline'}
+                  size={20}
+                  color="#9CA3AF"
+                />
+              </TouchableOpacity>
+            </View>
+
+            {/* Botón iniciar sesión */}
+            <TouchableOpacity
+              style={[styles.btnPrimary, loading && styles.btnDisabled]}
+              onPress={handleLogin}
+              disabled={loading}
+              activeOpacity={0.85}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.btnPrimaryText}>Iniciar sesión</Text>
+              )}
             </TouchableOpacity>
-          </View>
 
-          {/* Botón iniciar sesión */}
-          <TouchableOpacity
-            style={[styles.btnPrimary, loading && styles.btnDisabled]}
-            onPress={handleLogin}
-            disabled={loading}
-            activeOpacity={0.85}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.btnPrimaryText}>Iniciar sesión</Text>
-            )}
-          </TouchableOpacity>
-
-          {/* ¿Olvidaste tu contraseña? */}
-          <TouchableOpacity
-            style={styles.forgotContainer}
-            onPress={() => navigation.navigate('ForgotPassword')}
-          >
-            <Text style={styles.forgotText}>¿Olvidaste tu contraseña?</Text>
-          </TouchableOpacity>
-
-          {/* Separador */}
-          <View style={styles.divider} />
-
-          {/* Link a registro */}
-          <View style={styles.registerRow}>
-            <Text style={styles.registerText}>¿No tienes cuenta? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text style={styles.registerLink}>Regístrate</Text>
+            {/* ¿Olvidaste tu contraseña? */}
+            <TouchableOpacity
+              style={styles.forgotContainer}
+              onPress={() => navigation.navigate('ForgotPassword')}
+            >
+              <Text style={styles.forgotText}>¿Olvidaste tu contraseña?</Text>
             </TouchableOpacity>
+
+            {/* Separador */}
+            <View style={styles.divider} />
+
+            {/* Link a registro */}
+            <View style={styles.registerRow}>
+              <Text style={styles.registerText}>¿No tienes cuenta? </Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+                <Text style={styles.registerLink}>Regístrate</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Modal estético */}
       <StatusModal
@@ -214,7 +233,7 @@ export default function LoginScreen({ navigation, route }) {
         buttonText={modalConfig.buttonText}
         onClose={hideModal}
       />
-    </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 

@@ -1,3 +1,4 @@
+// src/components/StatusModal.jsx
 import React from 'react';
 import {
   Modal,

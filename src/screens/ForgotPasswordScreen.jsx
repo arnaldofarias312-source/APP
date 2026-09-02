@@ -1,4 +1,5 @@
-import { useState } from 'react';
+// src/screens/ForgotPasswordScreen.jsx
+import { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,21 +11,23 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabaseAnon } from '../lib/supabase';
 import StatusModal from '../components/StatusModal';
 
 export default function ForgotPasswordScreen({ navigation }) {
-  const [step, setStep] = useState(1); // 1: Pedir email, 2: Ingresar código OTP y nueva contraseña
+  const [step, setStep] = useState(1); // 1: Email, 2: Código OTP (8 casillas), 3: Nueva contraseña
   const [email, setEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
+  const [isOtpFocused, setIsOtpFocused] = useState(false);
+  const otpInputRef = useRef(null);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Estado para el modal estético
   const [modalConfig, setModalConfig] = useState({
     visible: false,
     type: 'info',
@@ -59,7 +62,17 @@ export default function ForgotPasswordScreen({ navigation }) {
       showModal({
         type: 'warning',
         title: 'Campo requerido',
-        message: 'Por favor ingresá tu correo electrónico para enviarte el código de seguridad.',
+        message: 'Por favor ingresa tu correo electrónico para enviarte el código de seguridad.',
+      });
+      return;
+    }
+
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email.trim())) {
+      showModal({
+        type: 'warning',
+        title: 'Correo inválido',
+        message: 'Por favor ingresa un correo electrónico válido (ej. juan@ejemplo.com).',
       });
       return;
     }
@@ -80,19 +93,51 @@ export default function ForgotPasswordScreen({ navigation }) {
     showModal({
       type: 'success',
       title: '¡Código enviado!',
-      message: `Enviamos un código de 8 dígitos a ${email.trim()}. Revisá tu bandeja de entrada o spam.`,
+      message: `Enviamos un código de 8 dígitos a ${email.trim()}. Revisa tu bandeja de entrada o spam.`,
       buttonText: 'Continuar',
       onConfirm: () => setStep(2),
     });
   };
 
-  // Paso 2: Validar código OTP y cambiar la contraseña
-  const handleResetPassword = async () => {
-    if (!otpCode.trim() || !newPassword || !confirmPassword) {
+  // Paso 2: Verificar solo el código OTP (8 casillas)
+  const handleVerifyCode = async () => {
+    if (!otpCode.trim() || otpCode.trim().length < 8) {
+      showModal({
+        type: 'warning',
+        title: 'Código incompleto',
+        message: 'Por favor ingresa el código completo de 8 dígitos que te enviamos.',
+      });
+      return;
+    }
+
+    setLoading(true);
+    const { error: verifyError } = await supabaseAnon.auth.verifyOtp({
+      email: email.trim(),
+      token: otpCode.trim(),
+      type: 'recovery',
+    });
+    setLoading(false);
+
+    if (verifyError) {
+      showModal({
+        type: 'error',
+        title: 'Código incorrecto',
+        message: 'El código de 8 dígitos que ingresaste es inválido o ha expirado. Verifícalo o solicita uno nuevo.',
+      });
+      return;
+    }
+
+    // Código válido -> Avanzar al Paso 3
+    setStep(3);
+  };
+
+  // Paso 3: Guardar la nueva contraseña
+  const handleSaveNewPassword = async () => {
+    if (!newPassword || !confirmPassword) {
       showModal({
         type: 'warning',
         title: 'Campos requeridos',
-        message: 'Por favor completá el código de 8 dígitos y ambos campos de contraseña.',
+        message: 'Por favor completa ambos campos de contraseña.',
       });
       return;
     }
@@ -110,31 +155,13 @@ export default function ForgotPasswordScreen({ navigation }) {
       showModal({
         type: 'warning',
         title: 'Las contraseñas no coinciden',
-        message: 'Asegurate de que ambas contraseñas escritas sean exactamente iguales.',
+        message: 'Asegúrate de que ambas contraseñas escritas sean exactamente iguales.',
       });
       return;
     }
 
     setLoading(true);
 
-    // 1. Verificar el token OTP usando supabaseAnon (sin persistir sesión en App.js)
-    const { error: verifyError } = await supabaseAnon.auth.verifyOtp({
-      email: email.trim(),
-      token: otpCode.trim(),
-      type: 'recovery',
-    });
-
-    if (verifyError) {
-      setLoading(false);
-      showModal({
-        type: 'error',
-        title: 'Código incorrecto',
-        message: 'El código de 8 dígitos que ingresaste es inválido o ha expirado. Verificalo o solicitá uno nuevo.',
-      });
-      return;
-    }
-
-    // 2. Actualizar la contraseña del usuario
     const { error: updateError } = await supabaseAnon.auth.updateUser({
       password: newPassword,
     });
@@ -150,10 +177,8 @@ export default function ForgotPasswordScreen({ navigation }) {
       return;
     }
 
-    // 3. Cerrar sesión en el cliente anónimo
     await supabaseAnon.auth.signOut();
 
-    // Redirigir directamente al login con la bandera de éxito
     navigation.navigate('Login', {
       resetSuccess: true,
       resetEmail: email.trim(),
@@ -162,7 +187,7 @@ export default function ForgotPasswordScreen({ navigation }) {
 
   const traducirError = (msg) => {
     if (msg.includes('rate limit') || msg.includes('Too many requests')) {
-      return 'Demasiados intentos seguidos. Esperá unos minutos antes de volver a intentar.';
+      return 'Demasiados intentos seguidos. Espera unos minutos antes de volver a intentar.';
     }
     if (msg.includes('invalid email') || msg.includes('Invalid email')) {
       return 'El correo electrónico ingresado no tiene un formato válido.';
@@ -173,177 +198,243 @@ export default function ForgotPasswordScreen({ navigation }) {
     return msg;
   };
 
-  return (
-    <KeyboardAvoidingView
-      style={styles.wrapper}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {/* Header con botón atrás */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => (step === 2 ? setStep(1) : navigation.goBack())}
-            style={styles.backButton}
-          >
-            <Ionicons name="arrow-back" size={22} color="#1B3FA6" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Recuperar contraseña</Text>
-        </View>
+  // Icono, título y subtítulo según el paso
+  const getHeaderInfo = () => {
+    if (step === 1) {
+      return {
+        icon: 'mail-outline',
+        title: '¿Olvidaste tu contraseña?',
+        subtitle: 'Ingresa tu correo electrónico y te enviaremos un código de seguridad para restablecerla.',
+      };
+    }
+    if (step === 2) {
+      return {
+        icon: 'keypad-outline',
+        title: 'Código de seguridad',
+        subtitle: `Ingresa el código de 8 dígitos que enviamos a ${email}.`,
+      };
+    }
+    return {
+      icon: 'lock-closed-outline',
+      title: 'Nueva contraseña',
+      subtitle: 'Crea tu nueva contraseña para acceder a tu cuenta de Movili.',
+    };
+  };
 
-        {/* Tarjeta */}
-        <View style={styles.card}>
-          <View style={styles.iconContainer}>
-            <Ionicons
-              name={step === 1 ? 'mail-outline' : 'shield-checkmark-outline'}
-              size={36}
-              color="#1B3FA6"
-            />
+  const headerInfo = getHeaderInfo();
+
+  return (
+    <SafeAreaView style={styles.wrapper}>
+      <KeyboardAvoidingView
+        style={styles.wrapper}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          {/* Header con botón atrás */}
+          <View style={styles.header}>
+            <TouchableOpacity
+              onPress={() => {
+                if (step === 3) setStep(2);
+                else if (step === 2) setStep(1);
+                else navigation.goBack();
+              }}
+              style={styles.backButton}
+            >
+              <Ionicons name="arrow-back" size={22} color="#1B3FA6" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Recuperar contraseña</Text>
           </View>
 
-          <Text style={styles.title}>
-            {step === 1 ? '¿Olvidaste tu contraseña?' : 'Ingresá el código'}
-          </Text>
+          {/* Tarjeta */}
+          <View style={styles.card}>
+            <View style={styles.iconContainer}>
+              <Ionicons name={headerInfo.icon} size={36} color="#1B3FA6" />
+            </View>
 
-          <Text style={styles.subtitle}>
-            {step === 1
-              ? 'Ingresá tu correo electrónico y te enviaremos un código de seguridad para restablecerla.'
-              : `Ingresá el código de 8 dígitos que enviamos a ${email} y tu nueva contraseña.`}
-          </Text>
+            <Text style={styles.title}>{headerInfo.title}</Text>
+            <Text style={styles.subtitle}>{headerInfo.subtitle}</Text>
 
-          {step === 1 ? (
-            /* PASO 1: Ingresar Email */
-            <>
-              <Text style={styles.label}>Correo electrónico</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons name="mail-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="ejemplo@correo.com"
-                  placeholderTextColor="#9CA3AF"
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
+            {/* PASO 1: Email */}
+            {step === 1 && (
+              <>
+                <Text style={styles.label}>Correo electrónico</Text>
+                <View style={styles.inputContainer}>
+                  <Ionicons name="mail-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="ejemplo@correo.com"
+                    placeholderTextColor="#9CA3AF"
+                    value={email}
+                    onChangeText={(text) => setEmail(text.replace(/\s/g, '').toLowerCase())}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
 
-              <TouchableOpacity
-                style={[styles.btnPrimary, loading && styles.btnDisabled]}
-                onPress={handleSendCode}
-                disabled={loading}
-                activeOpacity={0.85}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.btnPrimaryText}>Enviar código</Text>
-                )}
-              </TouchableOpacity>
-            </>
-          ) : (
-            /* PASO 2: Ingresar Código y Nueva Contraseña */
-            <>
-              {/* Código OTP */}
-              <Text style={styles.label}>Código de verificación (8 dígitos)</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons name="keypad-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ej. 12345678"
-                  placeholderTextColor="#9CA3AF"
-                  value={otpCode}
-                  onChangeText={setOtpCode}
-                  keyboardType="number-pad"
-                  autoCapitalize="none"
-                  maxLength={8}
-                />
-              </View>
-
-              {/* Nueva Contraseña */}
-              <Text style={styles.label}>Nueva contraseña</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons name="lock-closed-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Mínimo 8 caracteres"
-                  placeholderTextColor="#9CA3AF"
-                  value={newPassword}
-                  onChangeText={setNewPassword}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                />
                 <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeButton}
+                  style={[styles.btnPrimary, loading && styles.btnDisabled]}
+                  onPress={handleSendCode}
+                  disabled={loading}
+                  activeOpacity={0.85}
                 >
-                  <Ionicons
-                    name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                    size={20}
-                    color="#9CA3AF"
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.btnPrimaryText}>Enviar código</Text>
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* PASO 2: Código OTP — 8 casillas continuas sin separación */}
+            {step === 2 && (
+              <>
+                <Text style={styles.label}>Código de verificación (8 dígitos)</Text>
+                <TouchableOpacity
+                  activeOpacity={1}
+                  onPress={() => otpInputRef.current?.focus()}
+                  style={styles.otpContainer}
+                >
+                  <View style={styles.otpSingleRow}>
+                    {[0, 1, 2, 3, 4, 5, 6, 7].map((index) => {
+                      const digit = otpCode[index] || '';
+                      const isCurrent = isOtpFocused && (otpCode.length === index || (index === 7 && otpCode.length === 8));
+                      const isFilled = Boolean(digit);
+
+                      return (
+                        <View
+                          key={index}
+                          style={[
+                            styles.otpBox,
+                            isFilled && styles.otpBoxFilled,
+                            isCurrent && styles.otpBoxFocused,
+                          ]}
+                        >
+                          <Text style={[styles.otpDigit, isFilled && styles.otpDigitFilled]}>
+                            {digit}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+
+                  {/* Input invisible que captura el teclado */}
+                  <TextInput
+                    ref={otpInputRef}
+                    style={styles.hiddenOtpInput}
+                    value={otpCode}
+                    onChangeText={(text) => setOtpCode(text.replace(/[^0-9]/g, '').slice(0, 8))}
+                    keyboardType="number-pad"
+                    maxLength={8}
+                    onFocus={() => setIsOtpFocused(true)}
+                    onBlur={() => setIsOtpFocused(false)}
+                    textContentType="oneTimeCode"
+                    autoFocus={true}
                   />
                 </TouchableOpacity>
-              </View>
 
-              {/* Confirmar Nueva Contraseña */}
-              <Text style={styles.label}>Confirmar nueva contraseña</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons name="lock-closed-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Repite tu nueva contraseña"
-                  placeholderTextColor="#9CA3AF"
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  secureTextEntry={!showConfirmPassword}
-                  autoCapitalize="none"
-                />
                 <TouchableOpacity
-                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                  style={styles.eyeButton}
+                  style={[styles.btnPrimary, loading && styles.btnDisabled]}
+                  onPress={handleVerifyCode}
+                  disabled={loading}
+                  activeOpacity={0.85}
                 >
-                  <Ionicons
-                    name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'}
-                    size={20}
-                    color="#9CA3AF"
-                  />
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.btnPrimaryText}>Verificar código</Text>
+                  )}
                 </TouchableOpacity>
-              </View>
 
-              <TouchableOpacity
-                style={[styles.btnPrimary, loading && styles.btnDisabled]}
-                onPress={handleResetPassword}
-                disabled={loading}
-                activeOpacity={0.85}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.btnPrimaryText}>Restablecer contraseña</Text>
-                )}
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.resendBtn}
+                  onPress={handleSendCode}
+                  disabled={loading}
+                >
+                  <Text style={styles.resendText}>¿No recibiste el código? Reenviar</Text>
+                </TouchableOpacity>
+              </>
+            )}
 
-              <TouchableOpacity
-                style={styles.resendBtn}
-                onPress={handleSendCode}
-                disabled={loading}
-              >
-                <Text style={styles.resendText}>¿No recibiste el código? Reenviar</Text>
-              </TouchableOpacity>
-            </>
-          )}
+            {/* PASO 3: Nueva Contraseña */}
+            {step === 3 && (
+              <>
+                <Text style={styles.label}>Nueva contraseña</Text>
+                <View style={styles.inputContainer}>
+                  <Ionicons name="lock-closed-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Mínimo 8 caracteres"
+                    placeholderTextColor="#9CA3AF"
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={styles.eyeButton}
+                  >
+                    <Ionicons
+                      name={showPassword ? 'eye-outline' : 'eye-off-outline'}
+                      size={20}
+                      color="#9CA3AF"
+                    />
+                  </TouchableOpacity>
+                </View>
 
-          {/* Volver a iniciar sesión */}
-          <TouchableOpacity
-            style={styles.backToLoginBtn}
-            onPress={() => navigation.navigate('Login')}
-          >
-            <Text style={styles.backToLoginText}>Volver a Iniciar sesión</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+                <Text style={styles.label}>Confirmar nueva contraseña</Text>
+                <View style={styles.inputContainer}>
+                  <Ionicons name="lock-closed-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Repite tu nueva contraseña"
+                    placeholderTextColor="#9CA3AF"
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    secureTextEntry={!showConfirmPassword}
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                    style={styles.eyeButton}
+                  >
+                    <Ionicons
+                      name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'}
+                      size={20}
+                      color="#9CA3AF"
+                    />
+                  </TouchableOpacity>
+                </View>
 
-      {/* Modal estético para alertas y confirmaciones */}
+                <TouchableOpacity
+                  style={[styles.btnPrimary, loading && styles.btnDisabled]}
+                  onPress={handleSaveNewPassword}
+                  disabled={loading}
+                  activeOpacity={0.85}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.btnPrimaryText}>Guardar nueva contraseña</Text>
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* Volver a iniciar sesión */}
+            <TouchableOpacity
+              style={styles.backToLoginBtn}
+              onPress={() => navigation.navigate('Login')}
+            >
+              <Text style={styles.backToLoginText}>Volver a Iniciar sesión</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Modal estético */}
       <StatusModal
         visible={modalConfig.visible}
         type={modalConfig.type}
@@ -352,7 +443,7 @@ export default function ForgotPasswordScreen({ navigation }) {
         buttonText={modalConfig.buttonText}
         onClose={hideModal}
       />
-    </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
@@ -421,6 +512,61 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     fontWeight: '500',
   },
+  // ─── OTP Styles ───
+  otpContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 18,
+    marginTop: 4,
+    position: 'relative',
+  },
+  otpSingleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    gap: 4,
+  },
+  otpBox: {
+    flex: 1,
+    height: 48,
+    maxWidth: 36,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  otpBoxFilled: {
+    borderColor: '#93C5FD',
+    backgroundColor: '#EFF6FF',
+  },
+  otpBoxFocused: {
+    borderColor: '#1B3FA6',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#1B3FA6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  otpDigit: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#9CA3AF',
+  },
+  otpDigitFilled: {
+    color: '#1B3FA6',
+  },
+  hiddenOtpInput: {
+    position: 'absolute',
+    width: 1,
+    height: 1,
+    opacity: 0,
+  },
+  // ─── Input Styles ───
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',

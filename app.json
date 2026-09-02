@@ -22,7 +22,9 @@
     },
     "plugins": [
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      "react-native-permissions",
+      "@rnmapbox/maps"
     ]
   }
 }
